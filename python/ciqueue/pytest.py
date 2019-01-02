@@ -6,6 +6,8 @@ py.test -p ciqueue.pytest --queue redis://<host>:6379?worker=<worker_id>&build=<
 from __future__ import absolute_import
 from __future__ import print_function
 import zlib
+
+from _pytest.main import Session
 from ciqueue._pytest import test_queue
 from ciqueue._pytest import outcomes
 import dill
@@ -157,6 +159,59 @@ class RedisReporter(object):
                 self.terminalwriter.write(' TIMED OUT ', green=True)
 
 
+class SessionWrapper:
+
+    Interrupted = Session.Interrupted
+    Failed = Session.Failed
+
+    def __init__(self, session):
+        self._session = session
+
+    def pytest_collectstart(self):
+        print("DOBRZE pytest_collectstart")
+        return self._session.pytest_collectstart()
+
+    @property
+    def items(self):
+        print("DOBRZE items")
+        return self._session.items
+
+    @property
+    def shouldstop(self):
+        print("DOBRZE shouldstop")
+        return self._session.shouldstop
+
+    def pytest_runtest_logreport(self, report):
+        print("DOBRZE pytest_runtest_logreport")
+        return self._session.pytest_runtest_logreport(report)
+
+    pytest_collectreport = pytest_runtest_logreport
+
+    def isinitpath(self, path):
+        print("DOBRZE isinitpath")
+        return self._session.isinitpath(path)
+
+    def gethookproxy(self, fspath):
+        print("DOBRZE gethookproxy")
+        return self._session.gethookproxy(fspath)
+
+    def perform_collect(self, args=None, genitems=True):
+        print("DOBRZE perform_collect")
+        return self._session.perform_collect(args, genitems)
+
+    def collect(self):
+        print("DOBRZE collect")
+        return self._session.collect()
+
+    def matchnodes(self, matching, names):
+        print("DOBRZE matchnodes")
+        return self._session.matchnodes(matching, names)
+
+    def genitems(self, node):
+        print("DOBRZE genitems")
+        return self._session.genitems(node)
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtestloop(session):
     if (session.testsfailed and
@@ -173,6 +228,8 @@ def pytest_runtestloop(session):
     if queue.distributed:
         config.pluginmanager.register(RedisReporter(config, queue))
     session.items = ItemList(tests_index, queue)
+
+    session = SessionWrapper(session)
 
     for item in session.items:
         item.config.hook.pytest_runtest_protocol(item=item, nextitem=None)
